@@ -1,6 +1,6 @@
 # CentsAI 💸
 
-An AI-powered personal finance tracker. Users log expenses by typing a plain-language prompt ("spent 500 rupees on pizza yesterday and 200 today on a movie") — a dedicated microservice sends the prompt to Google's Gemini AI, extracts structured, categorized, dated transactions, and the backend persists them and powers dashboards, category breakdowns, and spending trend charts.
+An AI-powered personal finance tracker. Users log expenses by typing a plain-language prompt ("spent 500 rupees on pizza yesterday and 200 today on a movie") — a dedicated microservice sends the prompt to a Gemini-powered LangChain agent, extracts structured, categorized, dated transactions, and the backend persists them and powers dashboards, category breakdowns, and spending trend charts.
 
 ---
 
@@ -10,7 +10,7 @@ An AI-powered personal finance tracker. Users log expenses by typing a plain-lan
 |---|---|
 | **Frontend (live)** | [https://cents-ai.vercel.app](https://cents-ai.vercel.app/) — deployed on Vercel |
 | **Backend** | Spring Boot API — Dockerfile included, deployable to any Java 21-compatible host |
-| **AI Microservice** | Express + Gemini AI — deployable to any Node.js host |
+| **AI Microservice** | FastAPI + LangChain + Gemini — deployable to any Python 3.10+ host |
 | **Demo video** | [https://youtu.be/mXNpHLR403U](https://youtu.be/mXNpHLR403U) |
 
 ---
@@ -30,18 +30,18 @@ An AI-powered personal finance tracker. Users log expenses by typing a plain-lan
                                           │                           │
                                     ┌─────▼─────┐         ┌───────────▼────────────┐
                                     │  MongoDB   │         │  AI Microservice        │
-                                    │ (users,    │         │  (Express + Gemini)     │
+                                    │ (users,    │         │  (FastAPI + LangChain)  │
                                     │  expenses) │         └───────────┬────────────┘
                                     └────────────┘                     │
                                                                        ▼
-                                                          Google Gemini 2.5 Flash
+                                                          Google Gemini (gemini-3.6-flash)
 ```
 
 **Frontend** — React SPA deployed on Vercel. Talks to the backend over REST via a typed `api.ts` client, attaching the JWT from `localStorage` to every authenticated request.
 
 **Backend API** — Spring Boot (Java 21) service. Handles registration/login, JWT issuance, transaction CRUD, and per-user access control. Persists users and expenses in MongoDB. Forwards AI-entry prompts to the microservice via `MICROSERVICE_URI`.
 
-**AI Microservice** — Express service that receives a natural-language prompt, calls Gemini 2.5 Flash, and returns structured expense JSON (amount, category, date) back to the backend.
+**AI Microservice** — FastAPI service that receives a natural-language prompt, runs it through a LangChain agent backed by Gemini (with a currency-conversion tool available to the agent), and returns structured expense JSON (amount, category, date) back to the backend.
 
 ---
 
@@ -84,8 +84,14 @@ src/main/resources/application.properties
 ### [`CentsAI-gemini-microservice`](https://github.com/harshitkumar7525/CentsAI-gemini-microservice)
 
 ```
-index.js          # Express app — health check + /generate route
-package.json
+main.py            # FastAPI app — routes, CORS setup
+agent.py           # LangChain agent definition (Gemini + tools)
+tools.py           # Currency exchange-rate tool for the agent
+prompts.py         # System prompt template + output parser
+schemas.py         # Pydantic response models
+extraction.py      # Helper to pull plain text out of an agent message
+config.py          # Environment variable loading
+requirements.txt
 .env.example
 ```
 
@@ -97,7 +103,8 @@ package.json
 |---|---|
 | Java | 21 |
 | Gradle | 8.x |
-| Node.js | 18 (frontend) / 20 (microservice) |
+| Node.js | 18 (frontend only) |
+| Python | 3.10 (AI microservice) |
 | MongoDB | any recent version |
 | Google Gemini API key | — |
 
@@ -117,13 +124,17 @@ git clone https://github.com/harshitkumar7525/centsAI-frontend.git
 
 ```bash
 cd CentsAI-gemini-microservice
+python -m venv venv
+source venv/bin/activate   # on Windows: venv\Scripts\activate
+pip install -r requirements.txt
 cp .env.example .env
-# set GEMINI_API_KEY and CENTS_AI_BACKEND
-npm install
-node index.js
+# set GEMINI_API_KEY and BACKEND_URL
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Runs on `http://0.0.0.0:8000` by default.
+Runs on `http://0.0.0.0:8000` by default. Interactive docs at `http://localhost:8000/docs`.
+
+> **Note:** `.env.example` in this repo currently lists `CENTS_AI_BACKEND`, but `config.py` reads `BACKEND_URL` for the CORS origin. Set `BACKEND_URL` in your `.env` (or update `config.py`) so CORS is configured correctly.
 
 ### 3 — Start the backend API
 
@@ -157,8 +168,8 @@ Runs on `http://localhost:5173`.
 | Variable | Required | Description |
 |---|---|---|
 | `GEMINI_API_KEY` | Yes | Google Gemini API key |
-| `CENTS_AI_BACKEND` | Yes | Backend URL, used for CORS |
-| `PORT` | No | Server port (default: `8000`) |
+| `BACKEND_URL` | Yes | Backend URL, used as the allowed CORS origin |
+| `PORT` | No | Server port when running `python main.py` directly (default: `8000`) |
 
 ### Backend API (`application.properties`)
 
@@ -209,7 +220,8 @@ Every endpoint checks the path `userId` against the authenticated user and retur
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/` | No | Health check |
+| GET | `/` | No | Root / welcome message |
+| GET | `/health` | No | Health check |
 | POST | `/generate` | No | Extract structured expense(s) from a natural-language `prompt` |
 
 **`POST /generate` example**
@@ -250,13 +262,15 @@ curl -X POST http://localhost:8000/generate \
 
 ## AI Parsing Rules
 
-The microservice applies the following rules when turning a prompt into expense records:
+The microservice's LangChain agent applies the following rules when turning a prompt into expense records:
 
-- **Date handling** — understands relative references like "kal" (yesterday) and "today"; defaults to today's date if none is mentioned.
+- **Multiple transactions** — every distinct purchase mentioned in a single prompt is extracted as its own entry.
+- **Date handling** — understands relative references like "kal" (yesterday) and "aaj"/"today"; defaults to today's date if none is mentioned, and different transactions in the same prompt can resolve to different dates.
 - **Missing amount** — defaults to `0` if not specified.
-- **Currency conversion** — non-INR amounts are converted using last known rates.
+- **Currency conversion** — non-INR amounts are converted to INR by having the agent call a `get_exchange_rate` tool that fetches live rates.
 - **Categorization** — every expense is assigned one of `food`, `entertainment`, `bills`, `shopping`, `travel`, `health`, `education`, or `others`; anything that doesn't fit a known category falls back to `others`.
 - **No expense detected** — returns a single zero-amount, `others`-category placeholder rather than an empty array.
+- **Structured output** — the agent's response is validated against a Pydantic schema; if the LLM call fails or the output can't be parsed, the API returns `HTTP 502` with a descriptive error.
 
 ---
 
@@ -277,7 +291,7 @@ No migrations required — MongoDB creates collections on first insert.
 
 **Backend** — Ships with a `Dockerfile` and `docker-compose.yml`; deployable to any host that can run a Java 21 container or a Gradle-built jar. Set all `application.properties` variables (see above) in the host environment.
 
-**AI Microservice** — A plain Node/Express service; deployable to any Node.js host. Requires `GEMINI_API_KEY` and `CENTS_AI_BACKEND` to be set.
+**AI Microservice** — A FastAPI service run via Uvicorn; deployable to any Python 3.10+ host (or a container running `uvicorn main:app`). Requires `GEMINI_API_KEY` and `BACKEND_URL` to be set.
 
 ---
 
