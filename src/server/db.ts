@@ -7,7 +7,8 @@ export interface UserRecord {
   _id: ObjectId | string;
   username: string;
   email: string;
-  password: string;
+  password?: string;
+  googleSubject?: string;
 }
 
 export interface ExpenseRecord {
