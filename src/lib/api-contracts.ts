@@ -50,6 +50,30 @@ export const monthlyBudgetResponseSchema = z.object({
   amount: budgetAmountSchema.nullable(),
 });
 
+export const insightDaysSchema = z.number().int().min(1).max(7);
+export const insightNarrativeSchema = z.object({
+  summary: z.string(),
+  actions: z.array(z.string()),
+});
+export const insightTextSchema = insightNarrativeSchema.extend({
+  summary: z.string().trim().min(1).max(750),
+  actions: z.array(z.string().trim().min(1).max(250)).min(1).max(3),
+});
+export const insightSnapshotSchema = z.object({
+  startDate: dateString,
+  endDate: dateString,
+  budgetMonth: monthString,
+  monthlyBudget: budgetAmountSchema.nullable(),
+  salaryReceived: z.number().positive().nullable(),
+  recentExpenses: z.number(),
+  expenseCount: z.number().int().nonnegative(),
+  currentMonthExpensesInWindow: z.number(),
+});
+export const spendingInsightResponseSchema = z.object({
+  snapshot: insightSnapshotSchema,
+  insight: insightTextSchema.nullable(),
+});
+
 export const apiMessageSchema = z.object({ message: z.string() });
 export const apiErrorSchema = apiMessageSchema.extend({
   errors: z.record(z.string(), z.string()).optional(),
@@ -61,6 +85,7 @@ export type SalaryCredit = z.infer<typeof salaryCreditSchema>;
 export type Transaction = Expense | SalaryCredit;
 export type TransactionType = z.infer<typeof transactionTypeSchema>;
 export type MonthlyBudget = z.infer<typeof monthlyBudgetResponseSchema>;
+export type SpendingInsightResponse = z.infer<typeof spendingInsightResponseSchema>;
 export type TransactionResponse = z.infer<typeof transactionResponseSchema>;
 export type AllTransactionsResponse = z.infer<typeof allTransactionsResponseSchema>;
 export type ApiMessageResponse = z.infer<typeof apiMessageSchema>;

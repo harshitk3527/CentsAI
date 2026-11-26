@@ -37,6 +37,8 @@ In **Manual Entry**, choose **Salary credit** and enter the amount and the date 
 
 In **Monthly budget**, choose a calendar month and save a limit in INR. Each month has its own budget. The dashboard shows salary received, expenses, and the amount remaining or overspent for that month.
 
+In **AI spending insights**, choose an expense period of one to seven calendar days and generate a summary. Groq receives aggregated expenses for that window and the current month’s budget and recorded salary totals.
+
 ## API
 
 Transaction routes require `Authorization: Bearer <token>`. Registration and login return `user_id`, `username`, and `token`.
@@ -52,6 +54,7 @@ Transaction routes require `Authorization: Bearer <token>`. Registration and log
 | DELETE | `/api/v1/users/{userId}/transaction/{transactionId}` | |
 | GET | `/api/v1/users/{userId}/budget?month=YYYY-MM` | |
 | PUT | `/api/v1/users/{userId}/budget?month=YYYY-MM` | `amount` in INR, or `null` to clear that month’s budget |
+| POST | `/api/v1/users/{userId}/insights` | Optional `days` from 1 to 7 (defaults to 7) |
 
 The transaction routes return salary entries in `credits` and preserve the expense-only arrays. If `month` is omitted, the budget endpoint uses the current calendar month in `APP_TIME_ZONE`. A prompt without identifiable expenses or salary credits with positive amounts returns HTTP 400.
 
