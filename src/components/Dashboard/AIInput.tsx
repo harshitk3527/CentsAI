@@ -39,8 +39,8 @@ export function AIInput({ onSuccess }: AIInputProps) {
             <Sparkles className="w-5 h-5 text-primary" />
           </div>
           <Input
-            placeholder='Try: "I spent &#8377;45 on groceries today"'
-            aria-label="Describe your expenses"
+            placeholder='Try: "I received my ₹50,000 salary and spent ₹450 on groceries"'
+            aria-label="Describe your transactions"
             value={prompt}
             maxLength={4000}
             onChange={(e) => setPrompt(e.target.value)}

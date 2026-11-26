@@ -1,6 +1,7 @@
 import "server-only";
 
 import { MongoClient, ObjectId, type Db } from "mongodb";
+import type { TransactionType } from "@/lib/api-contracts";
 import { ConfigurationError } from "./http";
 
 export interface UserRecord {
@@ -17,6 +18,7 @@ export interface ExpenseRecord {
   amount: number;
   date: Date | string;
   category?: string | null;
+  type?: TransactionType;
 }
 
 declare global {

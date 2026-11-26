@@ -18,7 +18,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Loader2 } from "lucide-react";
+import { format } from "date-fns";
 import { api } from "@/lib/api";
+import type { TransactionType } from "@/lib/api-contracts";
 import { categoryList } from "@/lib/categories";
 import { toast } from "sonner";
 
@@ -30,24 +32,26 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [type, setType] = useState<TransactionType>("expense");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amount || !category || !date) {
+    if (!amount || (type === "expense" && !category) || !date) {
       toast.error("Please fill all fields");
       return;
     }
 
     setIsLoading(true);
     try {
-      await api.addTransaction(parseFloat(amount), category, date);
-      toast.success("Transaction added!");
+      await api.addTransaction(Number(amount), type === "expense" ? category : undefined, date, type);
+      toast.success(type === "credit" ? "Salary credited" : "Transaction added!");
       setOpen(false);
       setAmount("");
       setCategory("");
-      setDate(new Date().toISOString().split("T")[0]);
+      setDate(format(new Date(), "yyyy-MM-dd"));
+      setType("expense");
       onSuccess();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to add transaction");
@@ -67,9 +71,21 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
       <DialogContent className="glass border-border/50">
         <DialogHeader>
           <DialogTitle>Add Transaction</DialogTitle>
-          <DialogDescription>Enter your expense details manually</DialogDescription>
+          <DialogDescription>Record an expense or a salary payment you received.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="transaction-type">Transaction type</Label>
+            <Select value={type} onValueChange={(value) => setType(value === "credit" ? "credit" : "expense")}>
+              <SelectTrigger id="transaction-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="expense">Expense</SelectItem>
+                <SelectItem value="credit">Salary credit</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="amount">Amount (&#8377;)</Label>
             <Input
@@ -83,21 +99,21 @@ export function AddTransactionDialog({ onSuccess }: AddTransactionDialogProps) {
               required
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="category">Category</Label>
-            <Select value={category} onValueChange={setCategory} required>
-              <SelectTrigger>
-                <SelectValue placeholder="Select category" />
-              </SelectTrigger>
-              <SelectContent>
-                {categoryList.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {type === "expense" && (
+            <div className="space-y-2">
+              <Label htmlFor="category">Category</Label>
+              <Select value={category} onValueChange={setCategory} required>
+                <SelectTrigger id="category">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categoryList.map((cat) => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="date">Date</Label>
             <Input
