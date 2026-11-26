@@ -11,7 +11,7 @@ import { PeriodSelector, type Period } from "@/components/Dashboard/PeriodSelect
 import { SpendingInsights } from "@/components/Dashboard/SpendingInsights";
 import { SpendingTrendChart } from "@/components/Dashboard/SpendingTrendChart";
 import { CategoryBreakdown } from "@/components/Dashboard/CategoryBreakdown";
-import { MonthlyBudgetCard } from "@/components/Dashboard/MonthlyBudgetCard";
+import { BudgetEntryDialog, MonthlyBudgetCard, useMonthlyBudget } from "@/components/Dashboard/MonthlyBudgetCard";
 import { AISpendingInsights } from "@/components/Dashboard/AISpendingInsights";
 import { api, auth } from "@/lib/api";
 import type { AllTransactionsResponse, Transaction } from "@/lib/api-contracts";
@@ -36,6 +36,7 @@ const Dashboard = () => {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [period, setPeriod] = useState<Period>("30d");
+  const budget = useMonthlyBudget(!isLoading);
 
   const fetchTransactions = useCallback(() => {
     return api.getTransactions()
@@ -83,10 +84,11 @@ const Dashboard = () => {
             <div className="flex flex-wrap items-center gap-3">
               <PeriodSelector value={period} onChange={setPeriod} />
               <AddTransactionDialog onSuccess={fetchTransactions} />
+              <BudgetEntryDialog budget={budget.current} onSave={budget.saveBudget} />
             </div>
           </div>
 
-          <MonthlyBudgetCard expenses={expenses} credits={credits} />
+          <MonthlyBudgetCard expenses={expenses} credits={credits} budget={budget} />
           <AISpendingInsights />
 
           {/* Spending Insights */}

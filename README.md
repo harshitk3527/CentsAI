@@ -39,6 +39,8 @@ In **Monthly budget**, choose a calendar month and save a limit in INR. Each mon
 
 In **AI spending insights**, choose an expense period of one to seven calendar days and generate a summary. Groq receives aggregated expenses for that window and the current month’s budget and recorded salary totals.
 
+Set the server-only `REDIS_URL` to your cloud Redis connection URL. Use the `rediss://` URL provided by your service for TLS. Transaction and budget reads are cached per account for 12 hours by default. Override that lifetime with `REDIS_CACHE_TTL_SECONDS`. Adding, editing, or deleting a transaction invalidates transaction reads for the account. Saving or clearing a budget invalidates its budget reads. When Redis is unavailable or unconfigured, the app reads MongoDB directly. AI insights read fresh data on every request.
+
 ## API
 
 Transaction routes require `Authorization: Bearer <token>`. Registration and login return `user_id`, `username`, and `token`.
