@@ -20,13 +20,13 @@ const registration = credentials.extend({
     .refine((value) => !bcrypt.truncates(value), "Password must be at most 72 UTF-8 bytes"),
 });
 
-function signingKey() {
+export function signingKey() {
   const key = new TextEncoder().encode(process.env.JWT_SECRET);
   if (key.length < 32) throw new ConfigurationError("Set JWT_SECRET to at least 32 UTF-8 bytes");
   return key;
 }
 
-async function authResponse(user: UserRecord, status: number) {
+export async function createAuthSession(user: UserRecord): Promise<AuthResponse> {
   const userId = user._id.toString();
   const expiresIn = Math.floor(Number(process.env.JWT_EXPIRATION ?? 604_800_000) / 1000);
   if (!Number.isSafeInteger(expiresIn) || expiresIn <= 0) {
@@ -40,7 +40,11 @@ async function authResponse(user: UserRecord, status: number) {
     .setExpirationTime(Math.floor(Date.now() / 1000) + expiresIn)
     .sign(signingKey());
 
-  return Response.json({ user_id: userId, username: user.username, token } satisfies AuthResponse, {
+  return { user_id: userId, username: user.username, token };
+}
+
+async function authResponse(user: UserRecord, status: number) {
+  return Response.json(await createAuthSession(user), {
     status,
     headers: { "Cache-Control": "no-store" },
   });
@@ -67,7 +71,7 @@ export const register = apiRoute(async (request: Request) => {
 export const login = apiRoute(async (request: Request) => {
   const { email, password } = await readBody(request, credentials);
   const user = await (await getDb()).collection<UserRecord>("users").findOne({ email });
-  if (!user || !(await bcrypt.compare(password, user.password))) {
+  if (!user?.password || !(await bcrypt.compare(password, user.password))) {
     throw new HttpError(404, "Invalid email or password");
   }
   return authResponse(user, 200);

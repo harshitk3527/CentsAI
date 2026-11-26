@@ -25,6 +25,12 @@ Use Node.js 20.19 or later, a MongoDB instance, and a Groq API key.
 
 Point `MONGO_URI` at the existing database to carry over the `users` and `expenses` collections. Existing bcrypt passwords and BSON dates are supported. Set `LEGACY_MONGO_TIME_ZONE` to the previous Java application's time zone if it differs from the new app's setting. New transaction dates are stored as `YYYY-MM-DD` strings. Reusing the previous JWT secret lets existing signed tokens remain valid until expiration.
 
+## Google sign-in
+
+Create a Google OAuth client with application type **Web application**. Add `http://localhost:3000/api/auth/google/callback` as an authorized redirect URI for local development. For deployment, add the same path on your HTTPS domain. The redirect URI must match exactly. [Google OAuth setup](https://developers.google.com/identity/openid-connect/openid-connect#setredirecturi)
+
+Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` in the server environment, then restart the app. **Continue with Google** appears on the sign-in and registration pages. Existing CentsAI users enter their CentsAI password once to link Google and keep their existing expenses.
+
 ## API
 
 Transaction routes require `Authorization: Bearer <token>`. Registration and login return `user_id`, `username`, and `token`.

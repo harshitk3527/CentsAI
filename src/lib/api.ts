@@ -4,6 +4,7 @@ import {
   apiErrorSchema,
   apiMessageSchema,
   authResponseSchema,
+  googleSignInResponseSchema,
   transactionResponseSchema,
   type AllTransactionsResponse,
   type ApiMessageResponse,
@@ -64,6 +65,15 @@ export const api = {
       body: JSON.stringify({ email, password }),
     });
     return readResponse(res, authResponseSchema, "Invalid email or password");
+  },
+
+  async completeGoogleSignIn(password?: string) {
+    const res = await fetch("/api/auth/google/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    return readResponse(res, googleSignInResponseSchema, "Google sign-in failed");
   },
 
   // Transactions

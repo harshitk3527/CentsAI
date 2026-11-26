@@ -8,6 +8,13 @@ export const authResponseSchema = z.object({
   token: z.string(),
 });
 
+export const googleSignInResponseSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("signed_in"), session: authResponseSchema }),
+  z.object({ status: z.literal("password_required") }),
+]);
+
+export type GoogleSignInResponse = z.infer<typeof googleSignInResponseSchema>;
+
 const expenseSchema = z.object({
   id: z.string(),
   amount: z.number(),
