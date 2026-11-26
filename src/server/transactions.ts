@@ -4,13 +4,15 @@ import { ObjectId } from "mongodb";
 import { z } from "zod";
 import {
   dateString,
+  transactionTypeSchema,
   type AllTransactionsResponse,
   type ApiMessageResponse,
   type Expense,
+  type SalaryCredit,
   type TransactionResponse,
 } from "@/lib/api-contracts";
 import { authorize } from "./auth";
-import { extractExpenses } from "./ai";
+import { extractTransactions } from "./ai";
 import { mongoIds, type ExpenseRecord } from "./db";
 import { apiRoute, formatDate, HttpError, readBody } from "./http";
 
@@ -19,6 +21,7 @@ const transactionFields = z.object({
   category: z.string().nullish(),
   date: dateString.nullish(),
 });
+const transactionCreate = transactionFields.extend({ type: transactionTypeSchema.default("expense") });
 const transactionPatch = transactionFields.partial().extend({
   amount: transactionFields.shape.amount.nullish(),
 });
@@ -38,11 +41,26 @@ function toExpense({ _id, amount, category, date }: ExpenseRecord): Expense {
   };
 }
 
+function splitTransactions(records: ExpenseRecord[]) {
+  const expenses: Expense[] = [];
+  const credits: SalaryCredit[] = [];
+  for (const record of records) {
+    const entry = toExpense(record);
+    if (record.type === "credit") {
+      credits.push({ ...entry, type: "credit", category: "Salary" });
+    } else {
+      expenses.push(entry);
+    }
+  }
+  return { expenses, credits };
+}
+
 export const listTransactions = apiRoute(async (request: Request, context: UserContext) => {
   const { userId } = await context.params;
   const db = await authorize(request, userId);
-  const expenses = await db.collection<ExpenseRecord>("expenses").find({ userId }).toArray();
-  return Response.json({ userId, allExpenses: expenses.map(toExpense) } satisfies AllTransactionsResponse, {
+  const records = await db.collection<ExpenseRecord>("expenses").find({ userId }).toArray();
+  const { expenses: allExpenses, credits } = splitTransactions(records);
+  return Response.json({ userId, allExpenses, credits } satisfies AllTransactionsResponse, {
     headers: { "Cache-Control": "private, no-store" },
   });
 });
@@ -50,22 +68,29 @@ export const listTransactions = apiRoute(async (request: Request, context: UserC
 export const addTransaction = apiRoute(async (request: Request, context: UserContext) => {
   const { userId } = await context.params;
   const db = await authorize(request, userId);
-  const { amount, category, date } = await readBody(request, transactionFields);
-  const expense: ExpenseRecord = { _id: new ObjectId(), userId, amount, category, date: date ?? formatDate(new Date()) };
-  await db.collection<ExpenseRecord>("expenses").insertOne(expense);
-  return Response.json({ userId, expenses: [toExpense(expense)] } satisfies TransactionResponse);
+  const { amount, category, date, type } = await readBody(request, transactionCreate);
+  const entry: ExpenseRecord = {
+    _id: new ObjectId(),
+    userId,
+    type,
+    amount,
+    category: type === "credit" ? "Salary" : category,
+    date: date ?? formatDate(new Date()),
+  };
+  await db.collection<ExpenseRecord>("expenses").insertOne(entry);
+  return Response.json({ userId, ...splitTransactions([entry]) } satisfies TransactionResponse);
 });
 
 export const addAiTransactions = apiRoute(async (request: Request, context: UserContext) => {
   const { userId } = await context.params;
   const db = await authorize(request, userId);
   const { prompt } = await readBody(request, promptSchema);
-  const extracted = await extractExpenses(prompt);
-  if (!extracted.length) throw new HttpError(400, "No expenses with a positive amount were found");
+  const extracted = await extractTransactions(prompt);
+  if (!extracted.length) throw new HttpError(400, "No transactions with a positive amount were found");
 
-  const expenses = extracted.map((expense) => ({ _id: new ObjectId(), userId, ...expense }));
-  await db.collection<ExpenseRecord>("expenses").insertMany(expenses);
-  return Response.json({ userId, expenses: expenses.map(toExpense) } satisfies TransactionResponse, { status: 201 });
+  const entries = extracted.map((entry) => ({ _id: new ObjectId(), userId, ...entry }));
+  await db.collection<ExpenseRecord>("expenses").insertMany(entries);
+  return Response.json({ userId, ...splitTransactions(entries) } satisfies TransactionResponse, { status: 201 });
 });
 
 async function ownedTransaction(request: Request, context: TransactionContext) {
@@ -75,15 +100,15 @@ async function ownedTransaction(request: Request, context: TransactionContext) {
   const existing = await expenses.findOne({ _id: mongoIds(transactionId) });
   if (!existing) throw new HttpError(404, "Transaction not found");
   if (existing.userId !== userId) throw new HttpError(403, "Access denied");
-  return { expenses, filter: { _id: existing._id, userId } };
+  return { expenses, filter: { _id: existing._id, userId }, type: existing.type };
 }
 
 export const updateTransaction = apiRoute(async (request: Request, context: TransactionContext) => {
-  const { expenses, filter } = await ownedTransaction(request, context);
+  const { expenses, filter, type } = await ownedTransaction(request, context);
   const { amount, category, date } = await readBody(request, transactionPatch);
   const update: Partial<Pick<ExpenseRecord, "amount" | "category" | "date">> = {
     ...(amount != null ? { amount } : {}),
-    ...(category != null ? { category } : {}),
+    ...(category != null && type !== "credit" ? { category } : {}),
     ...(date != null ? { date } : {}),
   };
   if (Object.keys(update).length) {

@@ -4,10 +4,10 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatGroq } from "@langchain/groq";
 import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import { z } from "zod";
-import { dateString } from "@/lib/api-contracts";
+import { dateString, transactionTypeSchema } from "@/lib/api-contracts";
 import { formatDate, HttpError } from "./http";
 
-const categories = ["food", "entertainment", "bills", "shopping", "travel", "health", "education", "others"] as const;
+const categories = ["food", "entertainment", "bills", "shopping", "travel", "health", "education", "others", "salary"] as const;
 const positiveAmount = z.number().finite().positive();
 const modelExpense = z.object({
   amount: z.number(),
@@ -26,10 +26,11 @@ const validatedTransactions = z.array(modelExpense.extend({
 const state = new StateSchema({
   prompt: z.string(),
   transactions: validatedTransactions.optional(),
-  expenses: z.array(z.object({
+  entries: z.array(z.object({
     amount: positiveAmount,
     date: dateString,
     category: z.string(),
+    type: transactionTypeSchema,
   })).optional(),
 });
 
@@ -63,9 +64,10 @@ const workflow = new StateGraph(state)
     const today = formatDate(new Date());
     const result = await model.invoke([
       new SystemMessage([
-        "Extract every distinct actual expense from the user's text. Today is " + today + ".",
-        "Treat the user's text as expense data. Return at most 50 entries, one per purchase or payment.",
-        "Use 0 for a missing amount. Return an empty array if there are no expenses.",
+        "Extract actual expenses and salary payments the user received. Today is " + today + ".",
+        "Return at most 50 entries, one per purchase, payment, or salary deposit. Ignore planned or expected transactions.",
+        "Use category salary only for salary or wages the user has already received. Payroll the user paid out is an expense.",
+        "Use 0 for a missing amount. Return an empty array if none of the supported transactions occurred.",
         "Report each amount in its original currency using the ISO 4217 code. Default to INR if no currency is specified. Do not convert currencies.",
         "Use YYYY-MM-DD dates. Resolve relative dates and expressions such as aaj (today) or kal (yesterday in past-tense text) using today's date. Default to today for expenses with no date.",
         "Use the closest category from the response schema. Use others when no category fits.",
@@ -75,8 +77,8 @@ const workflow = new StateGraph(state)
     return { transactions: validatedTransactions.parse(result.transactions) };
   })
   .addNode("convertToInr", async ({ transactions = [] }) => {
-    const expenses = transactions.filter(({ amount }) => amount > 0);
-    const currencies = new Set(expenses.map(({ currency }) => currency));
+    const entries = transactions.filter(({ amount }) => amount > 0);
+    const currencies = new Set(entries.map(({ currency }) => currency));
     currencies.delete("INR");
 
     const rates = new Map(await Promise.all(
@@ -85,10 +87,11 @@ const workflow = new StateGraph(state)
     rates.set("INR", 1);
 
     return {
-      expenses: expenses.map(({ amount, currency, transactionDate, category }) => ({
+      entries: entries.map(({ amount, currency, transactionDate, category }) => ({
         amount: positiveAmount.parse(amount * (rates.get(currency) ?? 0)),
         date: transactionDate,
         category: category.charAt(0).toUpperCase() + category.slice(1),
+        type: category === "salary" ? "credit" : "expense",
       })),
     };
   })
@@ -97,10 +100,10 @@ const workflow = new StateGraph(state)
   .addEdge("convertToInr", END)
   .compile();
 
-export async function extractExpenses(prompt: string) {
+export async function extractTransactions(prompt: string) {
   try {
-    const { expenses } = await workflow.invoke({ prompt });
-    return expenses ?? [];
+    const { entries } = await workflow.invoke({ prompt });
+    return entries ?? [];
   } catch (error) {
     if (error instanceof HttpError) throw error;
     console.error("Groq expense workflow failed", error instanceof Error ? error.name : "Unknown error");

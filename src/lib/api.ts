@@ -5,11 +5,13 @@ import {
   apiMessageSchema,
   authResponseSchema,
   googleSignInResponseSchema,
+  monthlyBudgetResponseSchema,
   transactionResponseSchema,
   type AllTransactionsResponse,
   type ApiMessageResponse,
   type AuthResponse,
   type TransactionResponse,
+  type TransactionType,
 } from "./api-contracts";
 
 const API_BASE_URL = "/api/v1";
@@ -91,7 +93,7 @@ export const api = {
     return readResponse(res, allTransactionsResponseSchema, "Failed to fetch transactions");
   },
 
-  async addTransaction(amount: number, category?: string, date?: string): Promise<TransactionResponse> {
+  async addTransaction(amount: number, category?: string, date?: string, type: TransactionType = "expense"): Promise<TransactionResponse> {
     const userId = getUserId();
 
     if (!userId) {
@@ -100,6 +102,7 @@ export const api = {
 
     const payload = {
       amount,
+      type,
       ...(category ? { category } : {}),
       ...(date ? { date } : {}),
     };
@@ -159,6 +162,28 @@ export const api = {
       headers: authHeaders(),
     });
     return readResponse(res, apiMessageSchema, "Failed to delete transaction");
+  },
+
+  async getMonthlyBudget(month?: string, signal?: AbortSignal) {
+    const userId = getUserId();
+    if (!userId) throw new Error("User not authenticated");
+
+    const query = month ? `?${new URLSearchParams({ month })}` : "";
+    const res = await fetch(`${API_BASE_URL}/users/${userId}/budget${query}`, { headers: authHeaders(), signal });
+    return readResponse(res, monthlyBudgetResponseSchema, "Failed to load monthly budget");
+  },
+
+  async setMonthlyBudget(month: string, amount: number | null) {
+    const userId = getUserId();
+    if (!userId) throw new Error("User not authenticated");
+
+    const query = new URLSearchParams({ month });
+    const res = await fetch(`${API_BASE_URL}/users/${userId}/budget?${query}`, {
+      method: "PUT",
+      headers: authHeaders(),
+      body: JSON.stringify({ amount }),
+    });
+    return readResponse(res, monthlyBudgetResponseSchema, "Failed to save monthly budget");
   },
 };
 

@@ -7,6 +7,7 @@ import {
   Zap, 
   Heart, 
   MoreHorizontal,
+  Banknote,
   type LucideIcon
 } from "lucide-react";
 import type { Expense } from "./api-contracts";
@@ -19,6 +20,12 @@ export interface CategoryConfig {
 }
 
 export const categories: Record<string, CategoryConfig> & { other: CategoryConfig } = {
+  salary: {
+    name: "Salary",
+    icon: Banknote,
+    color: "text-emerald-400",
+    bgColor: "bg-emerald-400/10",
+  },
   food: {
     name: "Food",
     icon: Utensils,

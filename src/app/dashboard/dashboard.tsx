@@ -11,11 +11,13 @@ import { PeriodSelector, type Period } from "@/components/Dashboard/PeriodSelect
 import { SpendingInsights } from "@/components/Dashboard/SpendingInsights";
 import { SpendingTrendChart } from "@/components/Dashboard/SpendingTrendChart";
 import { CategoryBreakdown } from "@/components/Dashboard/CategoryBreakdown";
-import { api, auth, type Expense } from "@/lib/api";
+import { MonthlyBudgetCard } from "@/components/Dashboard/MonthlyBudgetCard";
+import { api, auth } from "@/lib/api";
+import type { AllTransactionsResponse, Transaction } from "@/lib/api-contracts";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-function filterExpensesByPeriod(expenses: Expense[], period: Period): Expense[] {
+function filterTransactionsByPeriod<T extends Transaction>(expenses: T[], period: Period): T[] {
   if (period === "all") return expenses;
   
   const days = period === "7d" ? 7 : period === "15d" ? 15 : 30;
@@ -27,13 +29,16 @@ function filterExpensesByPeriod(expenses: Expense[], period: Period): Expense[] 
 
 const Dashboard = () => {
   const router = useRouter();
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [{ allExpenses: expenses, credits }, setTransactions] = useState<Pick<AllTransactionsResponse, "allExpenses" | "credits">>({
+    allExpenses: [],
+    credits: [],
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [period, setPeriod] = useState<Period>("30d");
 
   const fetchTransactions = useCallback(() => {
     return api.getTransactions()
-      .then(({ allExpenses }) => setExpenses(allExpenses))
+      .then(setTransactions)
       .catch(() => {
         if (!auth.isAuthenticated()) {
           router.replace("/login");
@@ -52,7 +57,8 @@ const Dashboard = () => {
     void fetchTransactions();
   }, [fetchTransactions, router]);
 
-  const filteredExpenses = filterExpensesByPeriod(expenses, period);
+  const filteredExpenses = filterTransactionsByPeriod(expenses, period);
+  const filteredTransactions = [...filteredExpenses, ...filterTransactionsByPeriod(credits, period)];
 
   if (isLoading) {
     return (
@@ -71,13 +77,15 @@ const Dashboard = () => {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold">Dashboard</h1>
-              <p className="text-muted-foreground">Track and analyze your expenses</p>
+              <p className="text-muted-foreground">Track your expenses, salary, and monthly budget</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <PeriodSelector value={period} onChange={setPeriod} />
               <AddTransactionDialog onSuccess={fetchTransactions} />
             </div>
           </div>
+
+          <MonthlyBudgetCard expenses={expenses} credits={credits} />
 
           {/* Spending Insights */}
           <SpendingInsights expenses={expenses} period={period} />
@@ -95,7 +103,7 @@ const Dashboard = () => {
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
               <h2 className="text-lg font-semibold mb-4">Recent Transactions</h2>
-              <TransactionList expenses={filteredExpenses} onUpdate={fetchTransactions} />
+              <TransactionList transactions={filteredTransactions} onUpdate={fetchTransactions} />
             </div>
             <div>
               <ExpenseChart expenses={filteredExpenses} />

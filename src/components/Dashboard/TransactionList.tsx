@@ -34,19 +34,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { getCategoryConfig, categoryList } from "@/lib/categories";
-import type { Expense } from "@/lib/api";
+import type { Transaction } from "@/lib/api-contracts";
 import { api } from "@/lib/api";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { MoreVertical, Edit2, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface TransactionListProps {
-  expenses: Expense[];
+  transactions: Transaction[];
   onUpdate: () => void;
 }
 
-export function TransactionList({ expenses, onUpdate }: TransactionListProps) {
-  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+export function TransactionList({ transactions, onUpdate }: TransactionListProps) {
+  const [editingExpense, setEditingExpense] = useState<Transaction | null>(null);
   const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
   const [editAmount, setEditAmount] = useState("");
   const [editCategory, setEditCategory] = useState("");
@@ -54,17 +54,17 @@ export function TransactionList({ expenses, onUpdate }: TransactionListProps) {
   const [isEditLoading, setIsEditLoading] = useState(false);
   const [isDeleteLoading, setIsDeleteLoading] = useState(false);
 
-  const sortedExpenses = [...expenses].sort(
+  const sortedExpenses = [...transactions].sort(
     (a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime()
   );
 
   // Group expenses by date
-  const groupedExpenses = sortedExpenses.reduce<Record<string, Expense[]>>((acc, expense) => {
+  const groupedExpenses = sortedExpenses.reduce<Record<string, Transaction[]>>((acc, expense) => {
     (acc[expense.transactionDate] ??= []).push(expense);
     return acc;
   }, {});
 
-  const handleEditClick = (expense: Expense) => {
+  const handleEditClick = (expense: Transaction) => {
     setEditingExpense(expense);
     setEditAmount(expense.amount.toString());
     setEditCategory(expense.category);
@@ -114,10 +114,10 @@ export function TransactionList({ expenses, onUpdate }: TransactionListProps) {
     return format(date, "EEEE, MMM d, yyyy");
   };
 
-  if (expenses.length === 0) {
+  if (transactions.length === 0) {
     return (
       <Card className="p-8 text-center">
-        <p className="text-muted-foreground">No transactions yet. Add your first expense above!</p>
+        <p className="text-muted-foreground">No transactions in this period.</p>
       </Card>
     );
   }
@@ -126,24 +126,25 @@ export function TransactionList({ expenses, onUpdate }: TransactionListProps) {
     <>
       <div className="space-y-4">
         {Object.entries(groupedExpenses).map(([date, dayExpenses]) => {
-          const dayTotal = dayExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+          const dayTotal = dayExpenses.reduce((sum, entry) => sum + ("type" in entry ? entry.amount : -entry.amount), 0);
           
           return (
             <Card key={date} className="overflow-hidden">
               <div className="bg-secondary/50 px-4 py-3 flex items-center justify-between border-b border-border">
                 <h3 className="font-semibold text-sm">{getDateLabel(date)}</h3>
                 <span className="text-sm font-medium text-muted-foreground">
-                  ₹{dayTotal.toFixed(2)}
+                  Net {dayTotal > 0 ? "+" : dayTotal < 0 ? "−" : ""}₹{Math.abs(dayTotal).toFixed(2)}
                 </span>
               </div>
               <div className="divide-y divide-border">
-                {dayExpenses.map((expense, index) => {
+                {dayExpenses.map((expense) => {
                   const category = getCategoryConfig(expense.category);
                   const Icon = category.icon;
+                  const isCredit = "type" in expense;
                   
                   return (
                     <div
-                      key={`${expense.id || index}`}
+                      key={expense.id}
                       className="flex items-center justify-between p-4 hover:bg-secondary/30 transition-colors"
                     >
                       <div className="flex items-center gap-3">
@@ -153,17 +154,17 @@ export function TransactionList({ expenses, onUpdate }: TransactionListProps) {
                         <div>
                           <p className="font-medium">{expense.category}</p>
                           <p className="text-sm text-muted-foreground">
-                            {format(parseISO(expense.transactionDate), "h:mm a")}
+                            {isCredit ? "Credit" : "Expense"}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <p className="text-lg font-semibold">
-                          -₹{expense.amount.toFixed(2)}
+                        <p className={isCredit ? "text-lg font-semibold text-emerald-600 dark:text-emerald-400" : "text-lg font-semibold"}>
+                          {isCredit ? "+" : "−"}₹{expense.amount.toFixed(2)}
                         </p>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Actions for ${expense.category}`}>
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -210,7 +211,7 @@ export function TransactionList({ expenses, onUpdate }: TransactionListProps) {
         <DialogContent className="glass border-border/50">
           <DialogHeader>
             <DialogTitle>Edit Transaction</DialogTitle>
-            <DialogDescription>Update your expense details</DialogDescription>
+            <DialogDescription>Update your transaction details.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleEditSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -226,24 +227,24 @@ export function TransactionList({ expenses, onUpdate }: TransactionListProps) {
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-category">Category</Label>
-              <Select value={editCategory} onValueChange={setEditCategory} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {editCategory && !categoryList.includes(editCategory) && (
-                    <SelectItem value={editCategory}>{editCategory}</SelectItem>
-                  )}
-                  {categoryList.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {editingExpense && !("type" in editingExpense) && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-category">Category</Label>
+                <Select value={editCategory} onValueChange={setEditCategory} required>
+                  <SelectTrigger id="edit-category">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {editCategory && !categoryList.includes(editCategory) && (
+                      <SelectItem value={editCategory}>{editCategory}</SelectItem>
+                    )}
+                    {categoryList.map((cat) => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="edit-date">Date</Label>
               <Input

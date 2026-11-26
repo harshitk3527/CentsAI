@@ -1,6 +1,6 @@
 ﻿# CentsAI
 
-CentsAI tracks personal expenses. Add a transaction manually or describe several purchases in one message, then review them in the spending dashboard.
+CentsAI tracks expenses, salary credits, and monthly budgets. Enter transactions manually or describe them in one message, then review them in the dashboard.
 
 The Next.js App Router serves the UI and the REST API from one application. MongoDB stores users and expenses. The AI route runs a server-side LangGraph.js workflow that calls Groq through LangChain.js `ChatGroq`. The workflow extracts and validates expense amounts, categories, dates, and currencies. It converts foreign currencies to INR with ExchangeRate-API before saving entries. [Groq structured output](https://console.groq.com/docs/structured-outputs) · [LangGraph.js](https://docs.langchain.com/oss/javascript/langgraph/overview) · [ExchangeRate-API](https://www.exchangerate-api.com/docs/free)
 
@@ -31,6 +31,12 @@ Create a Google OAuth client with application type **Web application**. Add `htt
 
 Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` in the server environment, then restart the app. **Continue with Google** appears on the sign-in and registration pages. Existing CentsAI users enter their CentsAI password once to link Google and keep their existing expenses.
 
+## Salary and monthly budgets
+
+In **Manual Entry**, choose **Salary credit** and enter the amount and the date the salary was received. You can also describe salary deposits in the AI input. Salary credits appear as positive transactions and are excluded from spending charts.
+
+In **Monthly budget**, choose a calendar month and save a limit in INR. Each month has its own budget. The dashboard shows salary received, expenses, and the amount remaining or overspent for that month.
+
 ## API
 
 Transaction routes require `Authorization: Bearer <token>`. Registration and login return `user_id`, `username`, and `token`.
@@ -40,12 +46,14 @@ Transaction routes require `Authorization: Bearer <token>`. Registration and log
 | POST | `/api/v1/users/register` | `email`, `username`, `password` |
 | POST | `/api/v1/users/login` | `email`, `password` |
 | GET | `/api/v1/users/{userId}/transactions` | |
-| POST | `/api/v1/users/{userId}/transaction` | `amount`, optional `category` and `date` |
+| POST | `/api/v1/users/{userId}/transaction` | `amount`, optional `category`, `date`, and `type` (`expense` or `credit`) |
 | POST | `/api/v1/users/ai/{userId}/transaction` | `prompt` |
 | PATCH | `/api/v1/users/{userId}/transaction/{transactionId}` | Any of `amount`, `category`, `date` |
 | DELETE | `/api/v1/users/{userId}/transaction/{transactionId}` | |
+| GET | `/api/v1/users/{userId}/budget?month=YYYY-MM` | |
+| PUT | `/api/v1/users/{userId}/budget?month=YYYY-MM` | `amount` in INR, or `null` to clear that month’s budget |
 
-For example, try “I spent 500 rupees on pizza yesterday and 200 today on a movie” in the dashboard. The AI route returns the saved transactions, including their IDs. A prompt without identifiable expenses with positive amounts returns HTTP 400.
+The transaction routes return salary entries in `credits` and preserve the expense-only arrays. If `month` is omitted, the budget endpoint uses the current calendar month in `APP_TIME_ZONE`. A prompt without identifiable expenses or salary credits with positive amounts returns HTTP 400.
 
 ## Build and deployment
 
