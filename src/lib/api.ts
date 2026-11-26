@@ -6,6 +6,7 @@ import {
   authResponseSchema,
   googleSignInResponseSchema,
   monthlyBudgetResponseSchema,
+  spendingInsightResponseSchema,
   transactionResponseSchema,
   type AllTransactionsResponse,
   type ApiMessageResponse,
@@ -184,6 +185,18 @@ export const api = {
       body: JSON.stringify({ amount }),
     });
     return readResponse(res, monthlyBudgetResponseSchema, "Failed to save monthly budget");
+  },
+
+  async generateSpendingInsight(days: number) {
+    const userId = getUserId();
+    if (!userId) throw new Error("User not authenticated");
+
+    const res = await fetch(`${API_BASE_URL}/users/${userId}/insights`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ days }),
+    });
+    return readResponse(res, spendingInsightResponseSchema, "Failed to generate AI insights");
   },
 };
 

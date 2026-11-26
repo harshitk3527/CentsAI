@@ -13,7 +13,7 @@ import {
 } from "@/lib/api-contracts";
 import { authorize } from "./auth";
 import { extractTransactions } from "./ai";
-import { mongoIds, type ExpenseRecord } from "./db";
+import { formatStoredTransactionDate, mongoIds, type ExpenseRecord } from "./db";
 import { apiRoute, formatDate, HttpError, readBody } from "./http";
 
 const transactionFields = z.object({
@@ -35,9 +35,7 @@ function toExpense({ _id, amount, category, date }: ExpenseRecord): Expense {
     id: _id.toString(),
     amount,
     category: category ?? "Other",
-    transactionDate: typeof date === "string"
-      ? date
-      : formatDate(date, process.env.LEGACY_MONGO_TIME_ZONE || process.env.APP_TIME_ZONE || "Asia/Kolkata"),
+    transactionDate: formatStoredTransactionDate(date),
   };
 }
 

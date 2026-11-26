@@ -2,7 +2,7 @@ import "server-only";
 
 import { MongoClient, ObjectId, type Db } from "mongodb";
 import type { TransactionType } from "@/lib/api-contracts";
-import { ConfigurationError } from "./http";
+import { ConfigurationError, formatDate } from "./http";
 
 export interface UserRecord {
   _id: ObjectId | string;
@@ -19,6 +19,12 @@ export interface ExpenseRecord {
   date: Date | string;
   category?: string | null;
   type?: TransactionType;
+}
+
+export function formatStoredTransactionDate(date: ExpenseRecord["date"]) {
+  return typeof date === "string"
+    ? date
+    : formatDate(date, process.env.LEGACY_MONGO_TIME_ZONE || undefined);
 }
 
 declare global {

@@ -12,6 +12,7 @@ import { SpendingInsights } from "@/components/Dashboard/SpendingInsights";
 import { SpendingTrendChart } from "@/components/Dashboard/SpendingTrendChart";
 import { CategoryBreakdown } from "@/components/Dashboard/CategoryBreakdown";
 import { MonthlyBudgetCard } from "@/components/Dashboard/MonthlyBudgetCard";
+import { AISpendingInsights } from "@/components/Dashboard/AISpendingInsights";
 import { api, auth } from "@/lib/api";
 import type { AllTransactionsResponse, Transaction } from "@/lib/api-contracts";
 import { Loader2 } from "lucide-react";
@@ -86,6 +87,7 @@ const Dashboard = () => {
           </div>
 
           <MonthlyBudgetCard expenses={expenses} credits={credits} />
+          <AISpendingInsights />
 
           {/* Spending Insights */}
           <SpendingInsights expenses={expenses} period={period} />

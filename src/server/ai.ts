@@ -1,11 +1,11 @@
 import "server-only";
 
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { ChatGroq } from "@langchain/groq";
 import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import { z } from "zod";
 import { dateString, transactionTypeSchema } from "@/lib/api-contracts";
 import { formatDate, HttpError } from "./http";
+import { createGroqModel } from "./groq";
 
 const categories = ["food", "entertainment", "bills", "shopping", "travel", "health", "education", "others", "salary"] as const;
 const positiveAmount = z.number().finite().positive();
@@ -50,16 +50,8 @@ async function getInrRate(currency: string) {
 
 const workflow = new StateGraph(state)
   .addNode("extractTransactions", async ({ prompt }) => {
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) throw new HttpError(503, "AI service is unavailable");
-
-    const model = new ChatGroq({
-      apiKey,
-      model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
-      timeout: 20_000,
-      maxRetries: 0,
-      maxTokens: 4096,
-    }).withStructuredOutput<ModelOutput>(modelOutput, { name: "extract_expenses", method: "jsonSchema" });
+    const model = createGroqModel(4096)
+      .withStructuredOutput<ModelOutput>(modelOutput, { name: "extract_expenses", method: "jsonSchema" });
 
     const today = formatDate(new Date());
     const result = await model.invoke([
