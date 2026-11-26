@@ -5,7 +5,7 @@ import { jwtVerify, SignJWT } from "jose";
 import { MongoServerError, ObjectId } from "mongodb";
 import { z } from "zod";
 import type { AuthResponse } from "@/lib/api-contracts";
-import { getDb, mongoIds, type UserRecord } from "./db";
+import { getDb, mongoIds, type FinancialCacheUser, type UserRecord } from "./db";
 import { apiRoute, ConfigurationError, HttpError, readBody } from "./http";
 
 const credentials = z.object({
@@ -95,10 +95,10 @@ export async function authorize(request: Request, userId: string) {
   if (subject !== userId) throw new HttpError(403, "Access denied");
 
   const db = await getDb();
-  const exists = await db.collection<UserRecord>("users").findOne(
+  const user = await db.collection<UserRecord>("users").findOne<FinancialCacheUser>(
     { _id: mongoIds(userId) },
-    { projection: { _id: 1 } },
+    { projection: { _id: 1, transactionsRevision: 1, budgetsRevision: 1 } },
   );
-  if (!exists) throw new HttpError(404, "User not found");
-  return db;
+  if (!user) throw new HttpError(404, "User not found");
+  return { db, user };
 }

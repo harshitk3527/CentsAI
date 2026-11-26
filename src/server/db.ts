@@ -10,7 +10,11 @@ export interface UserRecord {
   email: string;
   password?: string;
   googleSubject?: string;
+  transactionsRevision?: string;
+  budgetsRevision?: string;
 }
+
+export type FinancialCacheUser = Pick<UserRecord, "_id" | "transactionsRevision" | "budgetsRevision">;
 
 export interface ExpenseRecord {
   _id: ObjectId | string;
